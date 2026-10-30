@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import threading
 
+import pytest
+
 from agent.interrupt_compat import request_hard_interrupt
 from agent.interrupt_control import interrupt_issuer, interrupt_skip_wording
 from tools.interrupt import set_interrupt
@@ -230,5 +232,70 @@ def test_soft_interrupt_with_tool_reason_is_attributed_to_the_system():
         # Rendered verbatim: consumers substitute ``{name}`` with str.replace, never str.format.
         agent._tool_interrupt_reason = "guard {x}"
         assert interrupt_skip_wording(agent) == "Turn aborted — guard {x}"
+    finally:
+        set_interrupt(False)
+
+
+@pytest.mark.parametrize("reason,message,expected", [
+    ("terminal batch timeout", None, "terminal_batch_timeout"),
+    (None, "next user task", None),
+])
+def test_soft_cancellation_cause_survives_child_handoff(reason, message, expected):
+    parent, child = _bare_agent(), _bare_agent()
+    parent._active_children = [child]
+    try:
+        parent.interrupt(message, tool_reason=reason)
+        assert interrupt_issuer(parent) == expected
+        assert interrupt_issuer(child) == expected
+        assert child._interrupt_message == message
+    finally:
+        set_interrupt(False)
+
+
+@pytest.mark.parametrize("reason,expected_type", [
+    ("session lease lost", "system_interrupt"),
+    (None, "keyboard_interrupt"),
+])
+def test_unfinished_slot_hook_distinguishes_system_and_user_cancellation(reason, expected_type):
+    from unittest.mock import patch
+    import agent.tool_executor as te
+
+    agent = _bare_agent()
+    try:
+        agent.interrupt(tool_reason=reason)
+        with patch.object(te, "_emit_terminal_post_tool_call") as emitted:
+            result, _, _ = te._unfinished_tool_result(
+                agent, te._ToolCallRef("terminal", {}, "task", "call", []),
+                timed_out=False, timeout_s=None)
+        assert emitted.call_args.kwargs["error_type"] == expected_type
+        assert emitted.call_args.kwargs["status"] == "cancelled"
+        if reason:
+            assert "Turn aborted — session lease lost" in result
+        else:
+            assert "Turn aborted" not in result
+    finally:
+        set_interrupt(False)
+
+
+@pytest.mark.parametrize("reason,expected_type", [
+    ("gateway shutdown", "system_interrupt"),
+    (None, "user_interrupt"),
+])
+def test_unstarted_slot_hook_distinguishes_system_and_user_cancellation(reason, expected_type):
+    from types import SimpleNamespace
+    from unittest.mock import patch
+    import agent.tool_executor as te
+
+    agent = _bare_agent()
+    try:
+        agent.interrupt(tool_reason=reason)
+        call = SimpleNamespace(id="call", function=SimpleNamespace(name="terminal", arguments="{}"))
+        rows = []
+        with patch.object(te, "_emit_terminal_post_tool_call") as emitted:
+            te._append_skipped_tool_results(
+                agent, rows, [call], "task", content="[Tool {name} was skipped]", hook_error_type="user_interrupt")
+        assert emitted.call_args.kwargs["error_type"] == expected_type
+        assert emitted.call_args.kwargs["status"] == "cancelled"
+        assert len(rows) == 1 and rows[0]["tool_call_id"] == "call"
     finally:
         set_interrupt(False)

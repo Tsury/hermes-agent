@@ -262,7 +262,7 @@ class InterruptControlMixin:
                 if hard_cancel:
                     request_hard_interrupt(child, message, tool_reason=tool_interrupt_reason)
                 else:
-                    child.interrupt(message)
+                    child.interrupt(message, tool_reason=tool_interrupt_reason)
             except Exception as e:
                 logger.debug("Failed to propagate interrupt to child agent: %s", e)
         if not self.quiet_mode:

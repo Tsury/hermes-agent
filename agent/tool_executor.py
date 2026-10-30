@@ -31,7 +31,7 @@ from agent.display import (
     _detect_tool_failure,
 )
 from agent.compression_marker import _COMPRESSION_MARKER_PREFIX
-from agent.interrupt_control import _REASON_USER_INTERRUPT, interrupt_skip_wording
+from agent.interrupt_control import _REASON_USER_INTERRUPT, interrupt_issuer, interrupt_skip_wording
 from agent.message_sanitization import coalesce_tool_call_id
 from agent.onboarding import observe_tool_result as observe_onboarding_result
 from agent import plugin_live_notes
@@ -348,7 +348,8 @@ def _append_skipped_tool_results(
         if hook_error_type is not None:
             _ToolCallRef(name, {}, effective_task_id, (hook_id or _pairing_tool_call_id)(tc), []).emit_post(
                 agent, result,
-                status="cancelled", error_type=hook_error_type, error_message=f"Tool execution skipped. {interrupt_skip_wording(agent)}",
+                status="cancelled", error_type="system_interrupt" if interrupt_issuer(agent) else hook_error_type,
+                error_message=f"Tool execution skipped. {interrupt_skip_wording(agent)}",
             )
         if flush_stage is not None:
             flushed = _flush_session_db_after_tool_progress(agent, messages, stage=f"{flush_stage} {name}")
@@ -1537,7 +1538,8 @@ def _unfinished_tool_result(agent, ref: _ToolCallRef, *, timed_out: bool, timeou
     elif agent._interrupt_requested:
         why = interrupt_skip_wording(agent)
         function_result = f"[Tool execution cancelled — {ref.name} was skipped. {why}]"
-        outcome = dict(status="cancelled", error_type="keyboard_interrupt", error_message=f"Tool execution cancelled. {why}")
+        outcome = dict(status="cancelled", error_type="system_interrupt" if interrupt_issuer(agent) else "keyboard_interrupt",
+                       error_message=f"Tool execution cancelled. {why}")
         tool_duration, effect_disposition = 0.0, None
     else:
         function_result = f"Error executing tool '{ref.name}': thread did not return a result"
