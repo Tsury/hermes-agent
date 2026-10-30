@@ -1,6 +1,7 @@
 """Tests for gateway/shutdown_flush.py — pending message durability (#72680)."""
 
 import json
+import sqlite3
 import time
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -218,6 +219,53 @@ def test_recover_skips_failing_payload_and_continues(tmp_path, monkeypatch):
     # The good file is consumed; the bad one is preserved for a retry.
     assert not good.exists()
     assert bad.exists()
+
+
+def test_resolved_failed_head_keeps_tail_and_recovers_in_fifo_order(tmp_path, monkeypatch):
+    """Resolver-only payloads share the resolved session's failure fence across a retry."""
+    from hermes_state import SessionDB
+    from tests.gateway.test_session_recovery import _store
+
+    flush_dir = _make_flush_dir(tmp_path)
+    monkeypatch.setattr("gateway.shutdown_flush._get_flush_dir", lambda: flush_dir)
+    db = SessionDB(db_path=tmp_path / "state.db")
+    try:
+        blocked_key = "agent:main:telegram:dm:41"
+        independent_key = "agent:main:telegram:dm:42"
+        db.create_session("blocked", "telegram", session_key=blocked_key)
+        db.create_session("independent", "telegram", session_key=independent_key)
+        store = _store(tmp_path / "sessions", db)
+        ts = int(time.time())
+        files = []
+        # Names deliberately oppose FIFO order; only ts/seq establishes arrival order.
+        for seq, (name, key, text) in enumerate([
+            ("z-head", blocked_key, "failed head"),
+            ("a-tail", blocked_key, "waiting tail"),
+            ("m-other", independent_key, "independent message"),
+        ]):
+            path = flush_dir / f"{name}.json"
+            path.write_text(json.dumps({
+                "session_key": key, "reason": "shutdown", "ts": ts, "seq": seq,
+                "data": {"text": text},
+            }), encoding="utf-8")
+            files.append(path)
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute("CREATE TRIGGER reject_head BEFORE INSERT ON messages "
+                         "WHEN NEW.content = 'failed head' "
+                         "BEGIN SELECT RAISE(FAIL, 'synthetic outage'); END")
+
+        assert recover_pending_to_db(db, session_resolver=store.resolve_session_id_for_key) == 1
+        assert db.get_messages("blocked") == []
+        assert [m["content"] for m in db.get_messages("independent")] == ["independent message"]
+        assert set(flush_dir.glob("*.json")) == set(files[:2])
+
+        with sqlite3.connect(db.db_path) as conn:
+            conn.execute("DROP TRIGGER reject_head")
+        assert recover_pending_to_db(db, session_resolver=store.resolve_session_id_for_key) == 2
+        assert [m["content"] for m in db.get_messages("blocked")] == ["failed head", "waiting tail"]
+        assert not list(flush_dir.glob("*.json"))
+    finally:
+        db.close()
 
 
 

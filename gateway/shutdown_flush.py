@@ -342,7 +342,7 @@ def recover_pending_spool(session_db=None, *, session_resolver=None) -> tuple[in
     recovered = 0
     # Sessions whose spool replay already failed this pass -> files held back for them. Ordering is a
     # per-session property, so one unhealthy session must not hold back the others.
-    blocked_sessions: dict[str, int] = {}
+    blocked_sessions: dict[tuple, int] = {}
     try:
         for path in flush_files:
             if path in _REPLAYED_UNREMOVABLE:
@@ -376,11 +376,11 @@ def recover_pending_spool(session_db=None, *, session_resolver=None) -> tuple[in
         logger.info("Held back %d spooled transcript file(s) for the next start after a failed replay: %s",
                     sum(blocked_sessions.values()),
                     ", ".join(f"{sid} ({count})" for sid, count in blocked_sessions.items()))
-    return recovered, set(blocked_sessions)
+    return recovered, {key[1] for key in blocked_sessions if key[0] != "route"}
 
 
 def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
-                         session_resolver=None, blocked_sessions: dict[str, int]) -> bool:
+                         session_resolver=None, blocked_sessions: dict[tuple, int]) -> bool:
     """Append one flush payload to ``session_db``; False when it was not replayed (the file is kept,
     or quarantined when the database rejected the row itself)."""
     # Cap-dropped transcript payloads carry the full message dict keyed by session_id: replay it
@@ -393,11 +393,12 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
             logger.warning("Cannot recover structurally invalid transcript spool "
                            "file %s; preserved for manual inspection", path)
             return False
-        if spooled_sid in blocked_sessions:
+        block_key = (id(session_db), spooled_sid)
+        if block_key in blocked_sessions:
             # An older message for this session could not be replayed. Writing this one now would give
             # it a lower row id than the message it follows, permanently inverting the transcript, so
             # leave it for the next start.
-            blocked_sessions[spooled_sid] += 1
+            blocked_sessions[block_key] += 1
             return False
         try:
             session_db.append_message(**transcript_append_kwargs(spooled_sid, message, fallback_ts=payload.get("ts")))
@@ -407,7 +408,7 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
                 return False
             # Same contract as drain_transcript_spool: stop this session's replay on the first failure
             # and keep the remaining spool files for the next attempt.
-            blocked_sessions[spooled_sid] = 1
+            blocked_sessions[block_key] = 1
             raise
         return True
     session_key, data = payload.get("session_key", ""), payload.get("data", {})
@@ -430,13 +431,26 @@ def _recover_one_payload(session_db, path: Path, payload: dict[str, Any], *,
             resolved = None
         if resolved and resolved[1] is not None:
             session_id, target_db = resolved
+    block_key = (id(target_db), session_id)
+    route_key = ("route", session_key)
+    if route_key in blocked_sessions or block_key in blocked_sessions:
+        blocked_sessions[block_key] = blocked_sessions.get(block_key, 0) + 1
+        return False
     if not session_id:
+        blocked_sessions[route_key] = 1
         logger.warning("Cannot recover pending message for %s: no session_id in flush file and "
                        "session_key-to-id resolution failed. "
                        "The message text is preserved in %s", session_key, path)
         return False
-    target_db.append_message(session_id=session_id, role="user", content=text,
-                             timestamp=payload.get("ts", int(time.time())))
+    try:
+        target_db.append_message(session_id=session_id, role="user", content=text,
+                                 timestamp=payload.get("ts", int(time.time())))
+    except Exception as exc:
+        if is_row_rejection(exc):
+            _quarantine_spool_file(path, session_id, exc)
+            return False
+        blocked_sessions[block_key] = 1
+        raise
     return True
 
 
