@@ -345,6 +345,9 @@ class GatewayTurnHygieneMixin:
                     live.event_stream.publish(source.chat_id, {
                         "text": text, "level": "info", "kind": "sticky", "key": status_key, "id": status_key,
                     }, event_type="notification.show")
+                    return lambda: live.event_stream.publish(
+                        source.chat_id, {"key": status_key}, event_type="notification.clear",
+                    )
             elif source.chat_id and (adapter := self._delivery_adapter_for(source)) is not None:
                 await _send_or_update_status_coro(adapter, source.chat_id, status_key, text,
                                                   _interim_metadata(attempt.meta))
@@ -780,7 +783,15 @@ class GatewayTurnHygieneMixin:
                     attempt, source, session_key, run_generation,
                 ))
             try:
-                _compressed = await self._hmwa_hygiene_wait_for_summary(attempt, hs, session_entry)
+                try:
+                    _compressed = await self._hmwa_hygiene_wait_for_summary(attempt, hs, session_entry)
+                finally:
+                    if notice is not None and not notice.cancel() and not notice.cancelled():
+                        try:
+                            if clear_notice := notice.result():
+                                clear_notice()
+                        except Exception:
+                            logger.warning("Failed to clear compression wait notice", exc_info=True)
             except HygieneTurnHoldExceeded:
                 _compressed = await self._hmwa_hygiene_on_turn_hold(attempt, hs, session_entry, session_key, source)
             except TimeoutError:
@@ -788,9 +799,6 @@ class GatewayTurnHygieneMixin:
             except BaseException:
                 self._hmwa_hygiene_on_unwind(attempt, hs, session_entry, session_key)
                 raise
-            finally:
-                if notice is not None:
-                    notice.cancel()
 
             await self._hmwa_hygiene_apply_result(
                 attempt, hs, _compressed, history, plan, session_entry=session_entry,
