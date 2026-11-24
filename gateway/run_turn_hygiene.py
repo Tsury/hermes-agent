@@ -324,6 +324,33 @@ class GatewayTurnHygieneMixin:
         except Exception as _werr:
             logger.warning("Failed to deliver %s to user: %s", what, _werr)
 
+    async def _hmwa_hygiene_wait_notice(self, attempt, source, session_key, run_generation):
+        """Show one progress notice when an extended inline compression wait is visible."""
+        from gateway.bot_peer_notices import automatic_notices_allowed
+        from gateway.run import _interim_metadata, _send_or_update_status_coro
+
+        await asyncio.sleep(5)
+        if attempt.future.done() or attempt.commit_fence.is_cancelled or not automatic_notices_allowed(source):
+            return
+
+        text = "⏳ Summarizing this long chat. The reply may take 2–3 minutes."
+        status_key = f"{session_key}:run:{run_generation}:hygiene-wait"
+        try:
+            if source.platform == Platform.LOCAL:
+                from gateway.session_authorities import active_authority
+
+                authority = active_authority(self)
+                live = authority.sessions.get(source.chat_id) if authority is not None else None
+                if live is not None:
+                    live.event_stream.publish(source.chat_id, {
+                        "text": text, "level": "info", "kind": "sticky", "key": status_key, "id": status_key,
+                    }, event_type="notification.show")
+            elif source.chat_id and (adapter := self._delivery_adapter_for(source)) is not None:
+                await _send_or_update_status_coro(adapter, source.chat_id, status_key, text,
+                                                  _interim_metadata(attempt.meta))
+        except Exception:
+            logger.warning("Failed to deliver compression wait notice", exc_info=True)
+
     async def _hmwa_hygiene_record_failure_cooldown(self, hs, session_key, session_id, reason):
         """Escalate the failure streak (off-loop) and persist the cooldown, when enabled."""
         from gateway.run import _hygiene_cooldown_for_failure, _record_hygiene_cooldown
@@ -747,6 +774,11 @@ class GatewayTurnHygieneMixin:
             # stop() close/checkpoint state.db under its late write (mirrors run_codex_hygiene_compaction).
             self._track_deferred_agent_worker(attempt.future, _hyg_agent)
             attempt.wait_started = time.monotonic()
+            notice = None
+            if hs.max_turn_hold_seconds >= 180:
+                notice = asyncio.create_task(self._hmwa_hygiene_wait_notice(
+                    attempt, source, session_key, run_generation,
+                ))
             try:
                 _compressed = await self._hmwa_hygiene_wait_for_summary(attempt, hs, session_entry)
             except HygieneTurnHoldExceeded:
@@ -756,6 +788,9 @@ class GatewayTurnHygieneMixin:
             except BaseException:
                 self._hmwa_hygiene_on_unwind(attempt, hs, session_entry, session_key)
                 raise
+            finally:
+                if notice is not None:
+                    notice.cancel()
 
             await self._hmwa_hygiene_apply_result(
                 attempt, hs, _compressed, history, plan, session_entry=session_entry,
