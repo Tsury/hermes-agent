@@ -8,7 +8,7 @@
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { isMain, repoRoot } from '../../../scripts/build/frontend-common.mjs'
+import { repoRoot } from '../../../scripts/build/frontend-common.mjs'
 import { sourceEntries } from '../../../scripts/build/freshness.mjs'
 import { prepareNodeDependencies } from '../../../scripts/build/node-deps.mjs'
 import { buildWebapp } from '../../../scripts/build/webapp.mjs'
@@ -52,7 +52,7 @@ export async function buildSourceWebapp(options = {}) {
   return buildWebapp({ source, workspace, out: join(source, 'apps/desktop/dist-webapp') })
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   try {
     const { values } = parseArgs({ options: {
       'no-install': { type: 'boolean', default: false },

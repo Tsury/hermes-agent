@@ -4,7 +4,6 @@ import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { constants as osConstants } from 'node:os'
 import { basename, delimiter, dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { prepareElectronRuntime } from './electron-runtime.mjs'
@@ -336,7 +335,7 @@ export function prepareNodeDependencies({ source, workspaces, env = process.env,
   return { source, workspaces: selected }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (import.meta.main) {
   // The Python bundle driver uses this same resolver, not a second layout probe.
   if (process.argv[2] === '--pnpm') {
     const child = spawnSync(pnpmCommand(), process.argv.slice(3), { stdio: 'inherit' })

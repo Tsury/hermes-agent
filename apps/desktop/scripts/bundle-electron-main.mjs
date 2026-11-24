@@ -4,7 +4,7 @@ import { mkdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { isMain, workspaceTool } from '../../../scripts/build/frontend-common.mjs'
+import { workspaceTool } from '../../../scripts/build/frontend-common.mjs'
 import { environmentDefaultsBanner } from './bundle-env.mjs'
 
 const repoRoot = resolve(import.meta.dirname, '../../..')
@@ -89,7 +89,7 @@ export async function bundleElectronMain({ source, out, stamp, dev = false }) {
   return { stampClock: bakedStamp }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const { values } = parseArgs({ options: {
     source: { type: 'string', default: repoRoot },
     out: { type: 'string' }, stamp: { type: 'string' }, dev: { type: 'boolean' },

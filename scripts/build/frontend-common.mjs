@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSy
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { setTimeout } from 'node:timers/promises'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 
 export const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -159,10 +159,6 @@ export async function rmTree(dir) {
       await setTimeout(50)
     }
   }
-}
-
-export function isMain(url) {
-  return process.argv[1] && url === pathToFileURL(path.resolve(process.argv[1])).href
 }
 
 export function frontendArgs(args, extra = {}) {

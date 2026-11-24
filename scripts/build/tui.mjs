@@ -4,7 +4,7 @@ import { cpSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } f
 import { tmpdir } from 'node:os'
 import { resolve, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { frontendArgs, isMain, productOutput, publishDirectory, repoRoot, withProduct, workspaceTool } from './frontend-common.mjs'
+import { frontendArgs, productOutput, publishDirectory, repoRoot, withProduct, workspaceTool } from './frontend-common.mjs'
 import { recordProduct, buildInputs } from './freshness.mjs'
 
 // `react-devtools-core` is only imported when DEV=true at runtime (Ink dev
@@ -99,7 +99,7 @@ async function buildDeveloperTui() {
   }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   try {
     const result = process.argv.length === 2
       ? await buildDeveloperTui()

@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { isMain } from './frontend-common.mjs'
 
 const receiptName = 'hermes-build.json'
 // What `hermes update` leaves in a product it could not rebuild (STALE_MARKER in hermes_cli/webapp.py).
@@ -258,7 +257,7 @@ export function rendererCurrent(out, inputs) {
   } catch { return false }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const { values } = parseArgs({ options: {
     source: { type: 'string' }, product: { type: 'string' }, out: { type: 'string' },
   } })

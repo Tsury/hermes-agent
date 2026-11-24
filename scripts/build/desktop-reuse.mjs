@@ -12,7 +12,6 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
 import { pathToFileURL } from 'node:url'
-import { isMain } from './frontend-common.mjs'
 
 const commitProvenance = new Set(['commit', 'commitDate', 'dirty', 'builtAt'])
 
@@ -25,7 +24,7 @@ export async function stampDrift({ source, baked, env = process.env, platform = 
     .filter(key => !commitProvenance.has(key) && JSON.stringify(baked[key]) !== JSON.stringify(fresh[key]))
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const { values } = parseArgs({ options: { source: { type: 'string' }, baked: { type: 'string' } } })
   if (!values.source || !values.baked) throw new Error('--source and --baked are required')
   const baked = JSON.parse(readFileSync(values.baked, 'utf8'))

@@ -4,7 +4,7 @@
 import { constants, copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync } from 'node:fs'
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { frontendArgs, isMain, productOutput, withProduct, workspaceTool } from './frontend-common.mjs'
+import { frontendArgs, productOutput, withProduct, workspaceTool } from './frontend-common.mjs'
 import { buildInputs, outputIntact, recordProduct, sourceHash } from './freshness.mjs'
 
 // Vite's build manifest (apps/desktop/vite.config.ts names it too): the files a generation emitted.
@@ -96,7 +96,7 @@ export async function buildWebapp({ source, workspace, out }) {
   return { out, index: join(out, 'index.html') }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   try {
     const { source, out } = frontendArgs(process.argv.slice(2))
     const result = await buildWebapp({ source, workspace: source, out })

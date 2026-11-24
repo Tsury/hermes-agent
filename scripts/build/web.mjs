@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { frontendArgs, isMain, productOutput, repoRoot, withProduct, workspaceTool } from './frontend-common.mjs'
+import { frontendArgs, productOutput, repoRoot, withProduct, workspaceTool } from './frontend-common.mjs'
 import { recordProduct, buildInputs } from './freshness.mjs'
 
 // --- Bounded build (#63338) -------------------------------------------------
@@ -70,7 +70,7 @@ function applyThreadCap() {
 }
 
 // Re-exec with the heap cap appended to NODE_OPTIONS unless the user already
-// set one. Runs only for direct invocation (isMain), before vite is imported.
+// set one. Runs only for direct invocation, before vite is imported.
 async function ensureHeapCapForFreshProcess() {
   const tokens = (process.env.NODE_OPTIONS ?? '').split(/\s+/).filter(Boolean)
   if (tokens.some(token => token.startsWith('--max-old-space-size='))) return
@@ -87,7 +87,7 @@ async function ensureHeapCapForFreshProcess() {
   process.exit(result.status ?? 1)
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   applyThreadCap()
   await ensureHeapCapForFreshProcess()
 }
@@ -147,7 +147,7 @@ export async function buildWeb(options) {
   return { out, index: path.join(out, 'index.html') }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   try {
     const options = process.argv.length === 2
       ? { source: repoRoot, icons: repoRoot, out: path.join(repoRoot, 'hermes_cli/web_dist') }

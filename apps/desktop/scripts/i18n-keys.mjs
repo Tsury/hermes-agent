@@ -11,7 +11,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
-import { isMain, repoRoot, workspaceTool } from '../../../scripts/build/frontend-common.mjs'
+import { repoRoot, workspaceTool } from '../../../scripts/build/frontend-common.mjs'
 
 export const SURFACE = 'desktop'
 
@@ -93,7 +93,7 @@ export async function emitDesktopKeys({ source = repoRoot, out, check = false } 
   return out
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const { values } = parseArgs({
     options: { source: { type: 'string' }, out: { type: 'string' }, check: { type: 'boolean', default: false } }
   })

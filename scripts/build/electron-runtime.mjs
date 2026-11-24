@@ -3,7 +3,6 @@ import { execFileSync } from 'node:child_process'
 import { copyFileSync, existsSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 
 import { lockImporters } from './pnpm-lock.mjs'
@@ -63,7 +62,7 @@ export function prepareElectronRuntime({ source, install = true, env = process.e
   return executable
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+if (import.meta.main) {
   const { values } = parseArgs({ options: {
     source: { type: 'string' }, 'no-install': { type: 'boolean', default: false },
   } })

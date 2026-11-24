@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 /** Run build helpers with the prepared Python, never an ambient uv environment. */
 import { execFileSync } from 'node:child_process'
-import { pathToFileURL } from 'node:url'
 
 /**
  * @param {string[]} args
@@ -15,7 +14,7 @@ export function runPython(args, options = {}) {
   return execFileSync(env.HERMES_PYTHON, args, { stdio: 'inherit', ...options, env })
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (import.meta.main) {
   try {
     runPython(process.argv.slice(2))
   } catch (/** @type {unknown} */ error) {

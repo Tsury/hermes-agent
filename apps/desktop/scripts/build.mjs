@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { cpSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parseArgs } from 'node:util'
-import { isMain, repoRoot } from '../../../scripts/build/frontend-common.mjs'
+import { repoRoot } from '../../../scripts/build/frontend-common.mjs'
 import { nativeInputsComplete } from './prepared-native-deps.mjs'
 
 export function buildSourceDesktop({ source = repoRoot, icons, run = execFileSync } = {}) {
@@ -32,7 +32,7 @@ export function buildSourceDesktop({ source = repoRoot, icons, run = execFileSyn
 }
 
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const { values } = parseArgs({ options: { icons: { type: 'string' } } })
   buildSourceDesktop(values)
 }

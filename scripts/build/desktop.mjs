@@ -7,7 +7,7 @@ import { bundleElectronMain, electronOutputs } from '../../apps/desktop/scripts/
 import { checkDistBuilt } from '../../apps/desktop/scripts/assert-dist-built.mjs'
 import { classifyNativeBinary } from '../../apps/desktop/scripts/stage-native-deps.mjs'
 import { copyNativeTree } from '../../apps/desktop/scripts/prepared-native-deps.mjs'
-import { frontendArgs, isMain, productOutput, withProduct, workspaceTool } from './frontend-common.mjs'
+import { frontendArgs, productOutput, withProduct, workspaceTool } from './frontend-common.mjs'
 import { recordProduct, buildInputs, rendererCurrent } from './freshness.mjs'
 
 function validateNativeTree(nativeDeps, platform) {
@@ -91,7 +91,7 @@ export async function buildDesktop({ source, out, icons, stamp, nativeDeps, type
   }
 }
 
-if (isMain(import.meta.url)) {
+if (import.meta.main) {
   const args = frontendArgs(process.argv.slice(2), {
     icons: { type: 'string' }, stamp: { type: 'string' }, 'native-deps': { type: 'string' },
     typecheck: { type: 'boolean' }, platform: { type: 'string' },
